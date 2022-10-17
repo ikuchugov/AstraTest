@@ -67,12 +67,6 @@
       name: docker-compose
       state: present
       update_cache: yes
-  #- name: Install prometheus-node-exporter
-   # remote_user: vagrant
-   # apt:
-   #   name: prometheus-node-exporter
-   #   state: present
-   #   update_cache: yes
   - name: Install prometheus node exporter
     unarchive:
       src: "https://github.com/prometheus/node_exporter/releases/download/v1.4.0/node_exporter-1.4.0.linux-amd64.tar.gz"
@@ -125,10 +119,43 @@
       src: files/{{ item }}
       dest: ~/docker-compose/{{ item }}
     loop:
-    - prometheus-dc.yml
+    - docker-compose.yml
   - name: deploy Docker Compose stack
     community.docker.docker_compose:
       project_src: ~/docker-compose
       files:
-      - prometheus-dc.yml
+      - docker-compose.yml
+  - name: Create Prometheus config directory
+    file:
+      path: ~/docker-compose/prometheus
+      state: directory
+  - name: Create Grafana datasources directory
+    file:
+      path: ~/docker-compose/grafana/provisioning/datasources
+      state: directory
+  - name: Create Grafana dashboards directory
+    file:
+      path: ~/docker-compose/grafana/provisioning/dashboards
+      state: directory    
+  - name: Copy prometheus Config
+    copy: 
+      src: files/prometheus.yml
+      dest: ~/docker-compose/prometheus/prometheus.yml
+  - name: Copy Grafana Datasource provisioning
+    copy: 
+      src: files/datasource.yml
+      dest: ~/docker-compose/grafana/provisioning/datasources/datasource.yml
+  - name: Copy Grafana Dashboards provisioning
+    copy: 
+      src: files/dashboard.yml
+      dest: ~/docker-compose/grafana/provisioning/dashboards/dashboard.yml
+  - name: Copy Grafana dashboard json
+    copy: 
+      src: files/dashboard.json
+      dest: ~/docker-compose/dashboard.json    
+  - name: reload Docker Compose stack
+    community.docker.docker_compose:
+      project_src: ~/docker-compose
+      files:
+      - docker-compose.yml
       

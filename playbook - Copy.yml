@@ -1,0 +1,136 @@
+---
+- hosts: all
+  connection: local
+  become: true
+  gather_facts: false
+  tasks:  
+  - name: Install docker packages
+    remote_user: vagrant
+    apt:
+      name: "{{ item }}"
+      state: present
+      update_cache: yes
+    with_items:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - software-properties-common
+    tags:
+      - docker
+  - name: Add docker off GPG key for Ubuntu
+    remote_user: vagrant
+    apt_key:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      state: present
+    tags:
+      - docker
+  - name: Verify gpg key with the fingerprint
+    remote_user: vagrant
+    apt_key:
+      id: 0EBFCD88
+      state: present
+    tags:
+      - docker
+  - name: Configure Docker for ubuntu stable repository
+    remote_user: vagrant
+    apt_repository:
+      repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+      state: present
+      update_cache: yes
+    tags:
+      - docker
+  - name: Update apt packages
+    remote_user: vagrant
+    apt:
+      update_cache: yes
+    tags:
+      - docker
+  - name: Install docker-ce
+    remote_user: vagrant
+    apt:
+      name: docker-ce
+      state: present
+      update_cache: yes
+    tags:
+      - docker
+  - name: Add "vagrant" user to "docker" group
+    remote_user: vagrant
+    user:
+      name: "vagrant"
+      group: "docker"
+      append: yes
+    tags:
+      - docker
+  - name: Install docker-compose
+    remote_user: vagrant
+    apt:
+      name: docker-compose
+      state: present
+      update_cache: yes
+  #- name: Install prometheus-node-exporter
+   # remote_user: vagrant
+   # apt:
+   #   name: prometheus-node-exporter
+   #   state: present
+   #   update_cache: yes
+  - name: Install prometheus node exporter
+    unarchive:
+      src: "https://github.com/prometheus/node_exporter/releases/download/v1.4.0/node_exporter-1.4.0.linux-amd64.tar.gz"
+      dest: /tmp/
+      remote_src: yes 
+  - name: Creating node_exporter user group
+    group: name="node_exporter_group"
+    become: true
+  - name: Creating node_exporter user
+    user:
+      name: "node_exporter_user"
+      group: "node_exporter_group"
+      system: yes
+      shell: "/sbin/nologin"
+      comment: "node_exporter_user nologin User"
+      createhome: "no"
+      state: present
+  - name: Copy prometheus node exporter file to bin
+    copy:
+      src: "/tmp/node_exporter-1.4.0.linux-amd64/node_exporter"
+      dest: "/usr/local/bin/node_exporter"
+      owner: "node_exporter_user"
+      group: "node_exporter_group"
+      remote_src: yes
+      mode: 0755
+  - name: Delete node exporter tmp folder
+    file:
+      path: '/tmp/node_exporter-1.4.0.linux-amd64'
+      state: absent
+  - name: Copy systemd init file
+    template:
+      src: init.service.j2
+      dest: /etc/systemd/system/node_exporter.service
+  - name: Start node_exporter service
+    service:
+      name: node_exporter
+      state: started
+      enabled: yes
+  - name: Check if node exporter emits metrics
+    uri:
+      url: http://127.0.0.1:9100/metrics
+      method: GET
+      status_code: 200
+
+
+
+
+
+      grafana:
+    image: grafana/grafana
+    user: "472"
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+    env_file:
+      - ./grafana/config.monitoring
+    networks:
+      - monitoring
+    restart: always
